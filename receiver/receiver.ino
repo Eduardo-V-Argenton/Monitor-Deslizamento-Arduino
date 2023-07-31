@@ -16,6 +16,7 @@
 HardwareSerial hs(UART);
 LoRa_E220 lora(&hs, AUX_PIN, M0_PIN, M1_PIN, UART_BPS_RATE);
 
+
 void loraConfig(){
   lora.begin();
   ResponseStructContainer c;
@@ -40,11 +41,14 @@ void setup() {
 }
  
 void loop() {
-  if (lora.available()  > 1){
-    ResponseContainer rs = lora.receiveMessageRSSI();
-    String message = rs.data; // First ever get the data
-    Serial.println(rs.status.getResponseDescription());
-    Serial.println(rs.rssi);
-    Serial.println(message);
-  }
+    if (lora.available()  > 1){
+        ResponseStructContainer rsc = lora.receiveMessageRSSI(sizeof(packet<sensors_read>));
+        struct packet<sensors_read> pck = *(packet<sensors_read>*) rsc.data;
+        printSensorReadings(&pck.data);
+    }
+    // else{
+    //     ResponseStatus lora_response = lora.sendFixedMessage(0,1,64,"Ola mundo");
+    //     Serial.println(lora_response.getResponseDescription());
+    //     delay(2000);
+    // }
 }

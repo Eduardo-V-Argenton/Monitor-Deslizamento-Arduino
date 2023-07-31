@@ -1,6 +1,25 @@
 #ifndef EXTRAS_H
     #define EXTRAS_H
     
+    template<typename T>
+    struct packet{
+        T data;
+        byte ACK;
+        byte OP;
+        bool USEACK;
+        bool SYN;
+        bool URG;
+        bool BRC;
+    };
+
+    struct sensors_read{
+        float accelerometer[3];
+        int air_humidity;
+        int air_temperature;
+        int soil_humidity;
+        int rain_sensor_value;
+    };
+
     void printParameters(struct Configuration configuration) {
         Serial.println("----------------------------------------");
 
@@ -26,6 +45,15 @@
 
 
         Serial.println("----------------------------------------");
-    } 
+    }
+
+    void printSensorReadings(struct sensors_read* data) {
+        printf("Accelerometer: [%.2f, %.2f, %.2f]\n",
+           data->accelerometer[0], data->accelerometer[1], data->accelerometer[2]);
+        printf("Air Humidity: %d\n", data->air_humidity);
+        printf("Air Temperature: %d\n", data->air_temperature);
+        printf("Soil Humidity: %d\n", data->soil_humidity);
+        printf("Rain Sensor Value: %d\n", data->rain_sensor_value);
+    }
 
 #endif
