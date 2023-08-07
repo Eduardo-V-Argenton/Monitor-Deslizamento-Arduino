@@ -149,7 +149,7 @@ void loadSensorRead(struct Packet<SensorsRead>* pck){
     pck->data.accelerometer[2] = event.acceleration.z;
     pck->data.air_humidity = dht.readHumidity();
     pck->data.air_temperature = dht.readTemperature();
-    pck->data.soil_humidity = map(analogRead(CAP_SOIL_PIN), cap_soil_air, cap_soil_water, 0, 100);
+    pck->data.soil_moisture = map(analogRead(CAP_SOIL_PIN), cap_soil_air, cap_soil_water, 0, 100);
     pck->data.rain_sensor_value = analogRead(RAIN_SENSOR_PIN);
 
 }

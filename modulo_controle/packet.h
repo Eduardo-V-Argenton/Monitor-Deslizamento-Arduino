@@ -13,7 +13,7 @@
         float accelerometer[3];
         float air_temperature;
         float air_humidity;
-        int soil_humidity;
+        int soil_moisture;
         int rain_sensor_value;
     };
 

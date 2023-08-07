@@ -80,7 +80,6 @@ byte waitSensorsRead(struct Packet<SensorsRead>* pck){
     while (millis() - startTime < timeout_packet){
         if (lora.available()  > 1){
             ResponseStructContainer rsc = lora.receiveMessage(sizeof(Packet<SensorsRead>));
-            Serial.println(sizeof(Packet<SensorsRead>));
             *pck = *(Packet<SensorsRead>*) rsc.data;
             rsc.close();
             return 1;
@@ -116,8 +115,8 @@ void printSensorReads(struct SensorsRead* data) {
     Serial.print(", ");
     Serial.println(data->accelerometer[2]);
 
-    Serial.print("Soil Humidity: ");
-    Serial.println(data->soil_humidity);
+    Serial.print("Soil Moisture: ");
+    Serial.println(data->soil_moisture);
 
     Serial.print("Air Temperature: ");
     Serial.println(data->air_temperature);
