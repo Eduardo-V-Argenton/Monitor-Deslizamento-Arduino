@@ -4,8 +4,9 @@
 #include <Adafruit_Sensor.h>
 #include <Adafruit_ADXL345_U.h>
 #include <DHT.h>
-
 #include "extras.h"
+#include "packet.h" 
+#include "reliable_lora.h"
 
 // LoRa
 #define UART 2
@@ -16,10 +17,13 @@
 #define UART_BPS UART_BPS_9600
 HardwareSerial hs(UART);
 LoRa_E220 lora(&hs, AUX_PIN, M0_PIN, M1_PIN, UART_BPS_RATE);
-int communication_channel = 64;
-int addr[] = {0,1};
-int receptor_addr[] = {0,2};
+struct SysConfigs sc;
+byte communication_channel = 64;
+byte addr[] = {0,1};
+byte receptor_addr[] = {0,2};
+
 int send_delay = 5000;
+int reliable = 1;
 
 // Sensors
 #define CAP_SOIL_PIN 34
@@ -34,50 +38,75 @@ void createAndSendSensorReadPacket();
 void loraConfig();
 void startDHT();
 void startAccel();
-void loadSensorRead(struct packet<sensors_read>* pck);
-void loadPacketOptions(struct packet<sensors_read>* pck, byte OP, byte ACK = 0, bool USEACK = false, bool URG = false, bool SYN = false, bool BRC = false);
-void sendPacket(struct packet<sensors_read>* pck);
+void loadSensorRead(struct Packet<SensorsRead>* pck);
+void sendPacket(struct Packet<SensorsRead>* pck);
+byte handshake();
 
 void setup() {
     Serial.begin(9600);
     loadLoraConfig();
     startDHT();
     startAccel();
+    lora.setMode(MODE_0_NORMAL);
 }
  
 void loop() {
-    createAndSendSensorReadPacket();
+    SendSensorsRead();
+}
+
+byte SendSensorsRead(){
+     if(reliable == 1){
+        if(handshake() == 0){
+            Serial.println("Erro no handshake");
+            return 0;
+        }
+    }
+    Serial.println("Handshake feito");
+    struct Packet<SensorsRead> pck;
+    struct Packet<byte> pck2;
+    unsigned long startTime = millis();
+    loadSensorRead(&pck);
+    pck.OP = 1;
+    sendSensorsRead(&pck);
+    while(waitACK(lora, &sc, &pck2) == 0){
+        if(millis() - startTime < 3000)
+            return 0;
+        else
+            sendSensorsRead(&pck);
+    }
+    return 1;
+    delay(2000);
+}
+
+byte handshake(){
+    struct Packet<byte> pck;
+    unsigned long startTime = millis();
+    while(waitSYN(lora, &pck) == 0){
+        if(millis() - startTime >= sc.time_out_handshake){return 0;}
+    }
+    sendSYNACK(lora, receptor_addr, communication_channel, 1);
+    while(waitACK(lora, &sc, &pck) == 0){
+        if(millis() - startTime >= sc.time_out_handshake)
+            return 0;
+        else
+            sendSYNACK(lora, receptor_addr, communication_channel, 1);
+    }
+    return 1;
 }
 
 
 void createAndSendSensorReadPacket(){
-    struct packet<sensors_read> pck;
+    struct Packet<SensorsRead> pck;
     loadSensorRead(&pck);
-    loadPacketOptions(&pck, 1);
+    pck.OP = 1;
     sendPacket(&pck);
     delay(2000);    
 }
 
-void sendPacket(struct packet<sensors_read>* pck){
-    ResponseStatus lora_response = lora.sendFixedMessage(receptor_addr[0],receptor_addr[1],communication_channel,pck,sizeof(packet<sensors_read>));
-    Serial.println(lora_response.getResponseDescription());
+byte sendSensorsRead(struct Packet<SensorsRead>* pck){
+    ResponseStatus lora_response = lora.sendFixedMessage(receptor_addr[0],receptor_addr[1],communication_channel,pck,sizeof(Packet<SensorsRead>));
+    return lora_response.code;
 }
-
-// int waitACK(){
-//     unsigned long startTime = millis();
-
-//     while (millis() - startTime < 10000){
-//         if (lora.available()  > 1){
-//             ResponseStructContainer rsc = lora.receiveMessageRSSI(sizeof(packet));
-//             struct packet pck =  *(struct packet*) rsc.data;
-//             if(pck.ACK == 1){
-//                 return 1;
-//             }
-//             rsc.close();
-//         }
-//     }
-//     return 0;
-// }
 
 void loadLoraConfig(){
     lora.begin();
@@ -110,7 +139,7 @@ void startAccel(){
     }   
 }
 
-void loadSensorRead(struct packet<sensors_read>* pck){
+void loadSensorRead(struct Packet<SensorsRead>* pck){
     sensors_event_t event; 
     accel.getEvent(&event);
 
@@ -121,13 +150,5 @@ void loadSensorRead(struct packet<sensors_read>* pck){
     pck->data.air_temperature = dht.readTemperature();
     pck->data.soil_humidity = analogRead(CAP_SOIL_PIN);
     pck->data.rain_sensor_value = analogRead(RAIN_SENSOR_PIN);
-}
 
-void loadPacketOptions(struct packet<sensors_read>* pck, byte OP, byte ACK, bool USEACK, bool URG, bool SYN , bool BRC){
-    pck->OP = OP;
-    pck->ACK = ACK;
-    pck->USEACK= USEACK;
-    pck->SYN = SYN;
-    pck->URG = URG;
-    pck->BRC = BRC;
 }
