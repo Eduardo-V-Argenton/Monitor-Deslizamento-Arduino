@@ -11,9 +11,9 @@
 
     struct SensorsRead{
         float accelerometer[3];
-        float soil_humidity;
         float air_temperature;
-        int air_humidity;
+        float air_humidity;
+        int soil_humidity;
         int rain_sensor_value;
     };
 

@@ -32,7 +32,8 @@ int reliable = 1;
 #define DHT_TYPE DHT11
 DHT dht(DHT_PIN, DHT_TYPE);
 Adafruit_ADXL345_Unified accel = Adafruit_ADXL345_Unified(12345);
-
+int cap_soil_air = 2600;
+int cap_soil_water = 700; 
 
 void createAndSendSensorReadPacket();
 void loraConfig();
@@ -75,7 +76,7 @@ byte SendSensorsRead(){
             sendSensorsRead(&pck);
     }
     return 1;
-    delay(2000);
+    delay(5000);
 }
 
 byte handshake(){
@@ -148,7 +149,7 @@ void loadSensorRead(struct Packet<SensorsRead>* pck){
     pck->data.accelerometer[2] = event.acceleration.z;
     pck->data.air_humidity = dht.readHumidity();
     pck->data.air_temperature = dht.readTemperature();
-    pck->data.soil_humidity = analogRead(CAP_SOIL_PIN);
+    pck->data.soil_humidity = map(analogRead(CAP_SOIL_PIN), cap_soil_air, cap_soil_water, 0, 100);
     pck->data.rain_sensor_value = analogRead(RAIN_SENSOR_PIN);
 
 }

@@ -20,6 +20,7 @@ byte addr[] = {0,2};
 byte receptor_addr[] = {0,1};
 int send_delay = 5000;
 
+
 int reliable = 1;
 unsigned long int timeout_packet = 10000;
 
@@ -38,6 +39,9 @@ void setup() {
 void loop() {
     struct Packet<SensorsRead> pck;
     recieveSensorsRead(&pck);
+    Serial.println("");
+    Serial.println("============================");
+    Serial.println("");
 }
 
 byte recieveSensorsRead(struct Packet<SensorsRead>* pck){
@@ -48,11 +52,13 @@ byte recieveSensorsRead(struct Packet<SensorsRead>* pck){
         }
     }
     Serial.println("Handshake feito");
+    Serial.println("");
     if(waitSensorsRead(pck) == 1){
         printSensorReads(&pck->data);
         sendACK(lora, receptor_addr, communication_channel, 1);
     }
-    delay(2000);
+    delay(5000);
+    return 1;
 }
 
 byte handshake(){
@@ -74,6 +80,7 @@ byte waitSensorsRead(struct Packet<SensorsRead>* pck){
     while (millis() - startTime < timeout_packet){
         if (lora.available()  > 1){
             ResponseStructContainer rsc = lora.receiveMessage(sizeof(Packet<SensorsRead>));
+            Serial.println(sizeof(Packet<SensorsRead>));
             *pck = *(Packet<SensorsRead>*) rsc.data;
             rsc.close();
             return 1;
