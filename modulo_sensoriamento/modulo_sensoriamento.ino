@@ -24,6 +24,7 @@ byte receptor_addr[] = {0,2};
 
 int send_delay = 5000;
 int reliable = 1;
+unsigned long int timeout_packet = 10000;
 
 // Sensors
 #define CAP_SOIL_PIN 34
@@ -42,6 +43,9 @@ void startAccel();
 void loadSensorRead(struct Packet<SensorsRead>* pck);
 void sendPacket(struct Packet<SensorsRead>* pck);
 byte handshake();
+byte recieveLoraConfig(struct Packet<LoRaConfig>* pck);
+byte waitLoRaPacket(struct Packet<LoRaConfig>* pck);
+byte loadLoRaConfigFromPacket(struct LoRaConfig* lc);
 
 void setup() {
     Serial.begin(9600);
@@ -52,17 +56,28 @@ void setup() {
 }
  
 void loop() {
-    SendSensorsRead();
+    byte OP;
+    if(reliable == 1){
+        if(handshake(&OP) == 0){
+            Serial.println("Erro no handshake");
+            exit -1;
+        }else{
+            Serial.println("Handshake feito");
+        }
+    }else{
+        SendSensorsRead();
+    }
+    if(OP == 1){
+        SendSensorsRead();
+    }
+    else if(OP == 2){
+        struct Packet<LoRaConfig> pck;
+        recieveLoraConfig(&pck);
+    }
 }
 
 byte SendSensorsRead(){
-     if(reliable == 1){
-        if(handshake() == 0){
-            Serial.println("Erro no handshake");
-            return 0;
-        }
-    }
-    Serial.println("Handshake feito");
+
     struct Packet<SensorsRead> pck;
     struct Packet<byte> pck2;
     unsigned long startTime = millis();
@@ -79,10 +94,10 @@ byte SendSensorsRead(){
     delay(5000);
 }
 
-byte handshake(){
+byte handshake(byte* OP){
     struct Packet<byte> pck;
     unsigned long startTime = millis();
-    while(waitSYN(lora, &pck) == 0){
+    while(waitSYN(lora, &pck, OP) == 0){
         if(millis() - startTime >= sc.time_out_handshake){return 0;}
     }
     sendSYNACK(lora, receptor_addr, communication_channel, 1);
@@ -149,7 +164,51 @@ void loadSensorRead(struct Packet<SensorsRead>* pck){
     pck->data.accelerometer[2] = event.acceleration.z;
     pck->data.air_humidity = dht.readHumidity();
     pck->data.air_temperature = dht.readTemperature();
-    pck->data.soil_moisture = map(analogRead(CAP_SOIL_PIN), cap_soil_air, cap_soil_water, 0, 100);
+    pck->data.soil_moisture = analogRead(CAP_SOIL_PIN);
     pck->data.rain_sensor_value = analogRead(RAIN_SENSOR_PIN);
+}
 
+byte loadLoRaConfigFromPacket(struct LoRaConfig* lc){
+    ResponseStructContainer c;
+    c = lora.getConfiguration();
+    Configuration configuration = *(Configuration*) c.data;
+    
+    configuration.ADDH = lc->ADDH;
+    configuration.ADDL = lc->ADDL;
+    configuration.CHAN = lc->CHAN;
+    configuration.SPED.uartParity = lc->uart_parity;
+    configuration.SPED.uartBaudRate = lc->uart_baud_rate;
+    configuration.SPED.airDataRate = lc->air_data_rate;
+    configuration.OPTION.subPacketSetting = lc->sub_packet_option;
+    configuration.OPTION.transmissionPower = lc->transmission_power;
+    configuration.OPTION.RSSIAmbientNoise = lc->enable_RSSI_ambient_noise;
+    configuration.TRANSMISSION_MODE.WORPeriod = lc->wor_period;
+    configuration.TRANSMISSION_MODE.enableLBT = lc->enable_lbt;
+    configuration.TRANSMISSION_MODE.enableRSSI = lc->enable_rssi;
+    configuration.TRANSMISSION_MODE.fixedTransmission = lc->enable_fixed_transmission;
+
+    ResponseStatus rs = lora.setConfiguration(configuration, WRITE_CFG_PWR_DWN_LOSE);
+    printParameters(configuration);
+    c.close();
+    return rs.code;
+}
+
+byte waitLoRaPacket(struct Packet<LoRaConfig>* pck){
+    unsigned long startTime = millis();
+    while (millis() - startTime < timeout_packet){
+        if (lora.available()  > 1){
+            ResponseStructContainer rsc = lora.receiveMessageRSSI(sizeof(Packet<LoRaConfig>));
+            *pck = *(Packet<LoRaConfig>*) rsc.data;
+            Serial.println(pck->data.CHAN);
+            rsc.close();
+            if(loadLoRaConfigFromPacket(&pck->data) == 1){
+                sendACK(lora, receptor_addr, communication_channel, 2);
+            }
+        }
+    }
+    return 0;
+}
+
+byte recieveLoraConfig(struct Packet<LoRaConfig>* pck){
+    return waitLoRaPacket(pck);
 }

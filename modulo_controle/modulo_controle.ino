@@ -29,31 +29,50 @@ byte handshake();
 byte recieveSensorsRead(struct Packet<SensorsRead>* pck);
 byte waitSensorsRead(struct Packet<SensorsRead>* pck);
 void printSensorReads(struct SensorsRead* data);
+byte sendLoraConfigPacket(struct Packet<LoRaConfig>* pck);
 
+void menu(){
+    Serial.println("rec dados --> 1");
+    Serial.println("env loraconfig --> 2");
+    Serial.println("--->");
+}
 void setup() {
     Serial.begin(9600);
     loadLoraConfig();
     lora.setMode(MODE_0_NORMAL);
+    menu();
 }
  
 void loop() {
-    struct Packet<SensorsRead> pck;
-    recieveSensorsRead(&pck);
-    Serial.println("");
-    Serial.println("============================");
-    Serial.println("");
+   
+    if(Serial.available() > 0){
+        int input = Serial.parseInt();
+
+        if(input == 1){
+            struct Packet<SensorsRead> pck;
+            recieveSensorsRead(&pck);
+        }
+        else if(input == 2){
+            struct Packet<LoRaConfig> pck;
+            sendLoraConfigPacket(&pck);
+        }
+        Serial.println("");
+        Serial.println("============================");
+        Serial.println("");
+    }
 }
 
 byte recieveSensorsRead(struct Packet<SensorsRead>* pck){
     if(reliable == 1){
-        if(handshake() == 0){
+        if(handshake(1) == 0){
             Serial.println("Erro no handshake");
             return 0;
         }
+        Serial.println("Handshake feito");
+        Serial.println("");
     }
-    Serial.println("Handshake feito");
-    Serial.println("");
     if(waitSensorsRead(pck) == 1){
+        Serial.println("Waiting SensorsRead");
         printSensorReads(&pck->data);
         sendACK(lora, receptor_addr, communication_channel, 1);
     }
@@ -61,17 +80,17 @@ byte recieveSensorsRead(struct Packet<SensorsRead>* pck){
     return 1;
 }
 
-byte handshake(){
+byte handshake(byte OP){
     struct Packet<byte> pck;
     unsigned long startTime = millis();
-    sendSYN(lora,receptor_addr, communication_channel, 1);
+    sendSYN(lora,receptor_addr, communication_channel, OP);
     while(waitSYNACK(lora, &sc, &pck) == 0){
         if(millis() - startTime < sc.time_out_handshake)
             return 0;
         else
-            sendSYN(lora,receptor_addr, communication_channel, 1);
+            sendSYN(lora,receptor_addr, communication_channel, OP);
     }
-    sendACK(lora,receptor_addr, communication_channel, 1);
+    sendACK(lora,receptor_addr, communication_channel, OP);
     return 1;
 }
 
@@ -128,4 +147,48 @@ void printSensorReads(struct SensorsRead* data) {
     Serial.println(data->rain_sensor_value);
 }
 
+void loadLoraConfigPacket(struct Packet<LoRaConfig>* pck){
+    pck->data.ADDH = 0;
+    pck->data.ADDL = 1;
+    pck->data.CHAN = 64cd D;
+    pck->data.uart_parity = MODE_00_8N1;
+    pck->data.uart_baud_rate = UART_BPS_9600;
+    pck->data.air_data_rate = AIR_DATA_RATE_010_24;
+    pck->data.sub_packet_option = SPS_200_00;
+    pck->data.transmission_power = POWER_22;
+    pck->data.enable_RSSI_ambient_noise = 0;
+    pck->data.wor_period = WOR_2000_011;
+    pck->data.enable_lbt = 0;
+    pck->data.enable_rssi = 0;
+    pck->data.enable_fixed_transmission = 1;
+}
+
+byte sendLoraConfigPacket(struct Packet<LoRaConfig>* pck){
+    if(reliable == 1){
+        if(handshake(2) == 0){
+            Serial.println("Erro no handshake");
+            return 0;
+        }
+        Serial.println("Handshake feito");
+        Serial.println("");
+    }
+    pck->OP = 2;
+    loadLoraConfigPacket(pck);
+    lora.sendFixedMessage(receptor_addr[0],receptor_addr[1],communication_channel,pck,sizeof(Packet<LoRaConfig>));
+
+    struct Packet<byte> pck_ack;
+    unsigned long startTime = millis();
+    while(waitACK(lora, &sc, &pck_ack) == 0){
+        if(millis() - startTime < 3000){
+            Serial.println("Erro na validação da alteração");
+            Serial.println("Retornando os valores do LoRa para default");
+            return 0;
+        }
+        else{
+            lora.sendFixedMessage(receptor_addr[0],receptor_addr[1],communication_channel,pck,sizeof(Packet<LoRaConfig>));
+        }
+    }
+    Serial.println("Configuração concluida");
+    return 1;
+}
 
