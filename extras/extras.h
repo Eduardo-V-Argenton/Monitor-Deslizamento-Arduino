@@ -2,7 +2,6 @@
     #define EXTRAS_H
     
 
-
     void printParameters(struct Configuration configuration) {
         Serial.println("----------------------------------------");
 

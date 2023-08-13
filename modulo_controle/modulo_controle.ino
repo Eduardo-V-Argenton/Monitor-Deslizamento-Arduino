@@ -1,7 +1,7 @@
 #include <HardwareSerial.h>
 #include <LoRa_E220.h> 
-#include "extras.h"
 #include "packet.h" 
+#include "extras.h"
 #include "reliable_lora.h"
 
 // LoRa
@@ -14,15 +14,16 @@
 
 HardwareSerial hs(UART);
 LoRa_E220 lora(&hs, AUX_PIN, M0_PIN, M1_PIN, UART_BPS_RATE);
-struct SysConfigs sc;
 byte communication_channel = 64;
 byte addr[] = {0,2};
 byte receptor_addr[] = {0,1};
 int send_delay = 5000;
 
-
 int reliable = 1;
 unsigned long int timeout_packet = 10000;
+unsigned long int time_out_SYNACK = 2000;
+unsigned long int time_out_ACK = 2000;
+unsigned long int time_out_handshake = 10000;
 
 void loadLoraConfig();
 byte handshake();
@@ -30,6 +31,7 @@ byte recieveSensorsRead(struct Packet<SensorsRead>* pck);
 byte waitSensorsRead(struct Packet<SensorsRead>* pck);
 void printSensorReads(struct SensorsRead* data);
 byte sendLoraConfigPacket(struct Packet<LoRaConfig>* pck);
+
 
 void menu(){
     Serial.println("rec dados --> 1");
@@ -83,8 +85,8 @@ byte handshake(byte OP){
     struct Packet<byte> pck;
     unsigned long startTime = millis();
     sendSYN(lora,receptor_addr, communication_channel, OP);
-    while(waitSYNACK(lora, &sc, &pck) == 0){
-        if(millis() - startTime < sc.time_out_handshake)
+    while(waitSYNACK(lora, time_out_SYNACK, &pck) == 0){
+        if(millis() - startTime < time_out_handshake)
             return 0;
         else
             sendSYN(lora,receptor_addr, communication_channel, OP);
@@ -177,7 +179,7 @@ byte sendLoraConfigPacket(struct Packet<LoRaConfig>* pck){
 
     struct Packet<byte> pck_ack;
     unsigned long startTime = millis();
-    while(waitACK(lora, &sc, &pck_ack) == 0){
+    while(waitACK(lora, time_out_ACK, &pck_ack) == 0){
         if(millis() - startTime < 3000){
             return 0;
         }
@@ -193,4 +195,3 @@ byte sendLoraConfigPacket(struct Packet<LoRaConfig>* pck){
     Serial.println("Configuração concluida");
     return 1;
 }
-

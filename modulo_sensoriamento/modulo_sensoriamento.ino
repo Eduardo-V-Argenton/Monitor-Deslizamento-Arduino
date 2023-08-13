@@ -17,7 +17,6 @@
 #define UART_BPS UART_BPS_9600
 HardwareSerial hs(UART);
 LoRa_E220 lora(&hs, AUX_PIN, M0_PIN, M1_PIN, UART_BPS_RATE);
-struct SysConfigs sc;
 byte communication_channel = 64;
 byte addr[] = {0,1};
 byte receptor_addr[] = {0,2};
@@ -25,6 +24,10 @@ byte receptor_addr[] = {0,2};
 int send_delay = 5000;
 int reliable = 1;
 unsigned long int timeout_packet = 10000;
+unsigned long int time_out_SYNACK = 2000;
+unsigned long int time_out_ACK = 2000;
+unsigned long int time_out_handshake = 10000;
+
 Configuration configuration_backup;
 
 // Sensors
@@ -85,7 +88,7 @@ byte SendSensorsRead(){
     loadSensorRead(&pck);
     pck.OP = 1;
     sendSensorsRead(&pck);
-    while(waitACK(lora, &sc, &pck2) == 0){
+    while(waitACK(lora, time_out_ACK, &pck2) == 0){
         if(millis() - startTime < 3000)
             return 0;
         else
@@ -99,11 +102,11 @@ byte handshake(byte* OP){
     struct Packet<byte> pck;
     unsigned long startTime = millis();
     while(waitSYN(lora, &pck, OP) == 0){
-        if(millis() - startTime >= sc.time_out_handshake){return 0;}
+        if(millis() - startTime >= time_out_handshake){return 0;}
     }
     sendSYNACK(lora, receptor_addr, communication_channel, 1);
-    while(waitACK(lora, &sc, &pck) == 0){
-        if(millis() - startTime >= sc.time_out_handshake)
+    while(waitACK(lora, time_out_ACK, &pck) == 0){
+        if(millis() - startTime >= time_out_handshake)
             return 0;
         else
             sendSYNACK(lora, receptor_addr, communication_channel, 1);
