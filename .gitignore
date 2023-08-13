@@ -1,6 +1,4 @@
 modulo_sensoriamento/reliable_lora.h
-modulo_sensoriamento/packet.h
 modulo_sensoriamento/extras.h
 modulo_controle/reliable_lora.h
-modulo_controle/packet.h
 modulo_controle/extras.h

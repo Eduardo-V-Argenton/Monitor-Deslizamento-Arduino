@@ -5,8 +5,8 @@
 #include <Adafruit_ADXL345_U.h>
 #include <DHT.h>
 #include "extras.h"
-#include "packet.h" 
 #include "reliable_lora.h"
+
 
 // LoRa
 #define UART 2
@@ -23,10 +23,6 @@ byte receptor_addr[] = {0,2};
 
 int send_delay = 5000;
 int reliable = 1;
-unsigned long int timeout_packet = 10000;
-unsigned long int time_out_SYNACK = 2000;
-unsigned long int time_out_ACK = 2000;
-unsigned long int time_out_handshake = 10000;
 
 Configuration configuration_backup;
 
@@ -61,7 +57,7 @@ void setup() {
 }
  
 void loop() {
-    byte OP;
+    byte OP = 0;
     if(reliable == 1){
         if(handshake(&OP) == 0){
             Serial.println("Erro no handshake");
@@ -89,7 +85,7 @@ byte SendSensorsRead(){
     pck.OP = 1;
     sendSensorsRead(&pck);
     while(waitACK(lora, time_out_ACK, &pck2) == 0){
-        if(millis() - startTime < 3000)
+        if(millis() - startTime >= timeout_packet)
             return 0;
         else
             sendSensorsRead(&pck);
@@ -124,7 +120,9 @@ void createAndSendSensorReadPacket(){
 }
 
 byte sendSensorsRead(struct Packet<SensorsRead>* pck){
+    pck->Checksum = serializeData(&pck->data);
     ResponseStatus lora_response = lora.sendFixedMessage(receptor_addr[0],receptor_addr[1],communication_channel,pck,sizeof(Packet<SensorsRead>));
+
     return lora_response.code;
 }
 
@@ -215,6 +213,12 @@ byte waitLoRaPacket(struct Packet<LoRaConfig>* pck){
             ResponseStructContainer rsc = lora.receiveMessageRSSI(sizeof(Packet<LoRaConfig>));
             *pck = *(Packet<LoRaConfig>*) rsc.data;
             rsc.close();
+            if(serializeData(&pck->data) != pck->Checksum){
+                Serial.println(pck->Checksum);
+                Serial.println(serializeData(&pck->data));
+                Serial.println("Falha no checksum");
+                continue;
+            }
             sendACK(lora, receptor_addr, communication_channel, 2);
             return 1;
         }
@@ -229,7 +233,7 @@ byte recieveLoraConfig(struct Packet<LoRaConfig>* pck){
     else if(loadLoRaConfigFromPacket(&pck->data) == 1){
         sendACK(lora, receptor_addr, communication_channel, 3);
     }
-    byte OP;
+    byte OP = 0;
     if(handshake(&OP) == 0){
         Serial.println("Erro no handshake");
         Serial.println("Restaurando configuração do LoRa");

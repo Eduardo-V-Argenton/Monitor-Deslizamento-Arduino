@@ -1,6 +1,5 @@
 #include <HardwareSerial.h>
 #include <LoRa_E220.h> 
-#include "packet.h" 
 #include "extras.h"
 #include "reliable_lora.h"
 
@@ -20,10 +19,7 @@ byte receptor_addr[] = {0,1};
 int send_delay = 5000;
 
 int reliable = 1;
-unsigned long int timeout_packet = 10000;
-unsigned long int time_out_SYNACK = 2000;
-unsigned long int time_out_ACK = 2000;
-unsigned long int time_out_handshake = 10000;
+
 
 void loadLoraConfig();
 byte handshake();
@@ -86,8 +82,9 @@ byte handshake(byte OP){
     unsigned long startTime = millis();
     sendSYN(lora,receptor_addr, communication_channel, OP);
     while(waitSYNACK(lora, time_out_SYNACK, &pck) == 0){
-        if(millis() - startTime < time_out_handshake)
+        if(millis() - startTime >= time_out_handshake){
             return 0;
+        }
         else
             sendSYN(lora,receptor_addr, communication_channel, OP);
     }
@@ -102,6 +99,10 @@ byte waitSensorsRead(struct Packet<SensorsRead>* pck){
             ResponseStructContainer rsc = lora.receiveMessage(sizeof(Packet<SensorsRead>));
             *pck = *(Packet<SensorsRead>*) rsc.data;
             rsc.close();
+            if(serializeData(&pck->data) != pck->Checksum){
+                Serial.println("Falha no checksum");
+                continue;
+            }
             return 1;
         }
     }
@@ -151,7 +152,7 @@ void printSensorReads(struct SensorsRead* data) {
 void loadLoraConfigPacket(struct Packet<LoRaConfig>* pck){
     pck->data.ADDH = 0;
     pck->data.ADDL = 1;
-    pck->data.CHAN = 32;
+    pck->data.CHAN = 64;
     pck->data.uart_parity = MODE_00_8N1;
     pck->data.uart_baud_rate = UART_BPS_9600;
     pck->data.air_data_rate = AIR_DATA_RATE_010_24;
@@ -160,7 +161,7 @@ void loadLoraConfigPacket(struct Packet<LoRaConfig>* pck){
     pck->data.enable_RSSI_ambient_noise = 0;
     pck->data.wor_period = WOR_2000_011;
     pck->data.enable_lbt = 0;
-    pck->data.enable_rssi = 0;
+    pck->data.enable_rssi = 1;
     pck->data.enable_fixed_transmission = 1;
 }
 
@@ -175,12 +176,13 @@ byte sendLoraConfigPacket(struct Packet<LoRaConfig>* pck){
     }
     pck->OP = 2;
     loadLoraConfigPacket(pck);
+    pck->Checksum = serializeData(&pck->data);
     lora.sendFixedMessage(receptor_addr[0],receptor_addr[1],communication_channel,pck,sizeof(Packet<LoRaConfig>));
 
     struct Packet<byte> pck_ack;
     unsigned long startTime = millis();
     while(waitACK(lora, time_out_ACK, &pck_ack) == 0){
-        if(millis() - startTime < 3000){
+        if(millis() - startTime >= timeout_packet){
             return 0;
         }
         else{

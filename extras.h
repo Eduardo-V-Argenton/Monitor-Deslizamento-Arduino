@@ -1,6 +1,37 @@
 #ifndef EXTRAS_H
     #define EXTRAS_H
+    #include <CRC16.h>
     
+    unsigned long int timeout_packet = 15000;
+    unsigned long int time_out_SYNACK = 5000;
+    unsigned long int time_out_ACK = 5000;
+    unsigned long int time_out_handshake = 15000;
+    
+    CRC16 crc;
+
+    struct SensorsRead{
+        float accelerometer[3];
+        float air_temperature;
+        float air_humidity;
+        int soil_moisture;
+        int rain_sensor_value;
+    };
+
+    struct LoRaConfig{
+        byte ADDH;
+        byte ADDL;
+        byte CHAN;
+        byte uart_parity;
+        byte uart_baud_rate;
+        byte air_data_rate;
+        byte sub_packet_option;
+        byte transmission_power;
+        bool enable_RSSI_ambient_noise;
+        byte wor_period;
+        bool enable_lbt;
+        bool enable_rssi;
+        bool enable_fixed_transmission;
+    };
 
     void printParameters(struct Configuration configuration) {
         Serial.println("----------------------------------------");
@@ -27,6 +58,16 @@
 
 
         Serial.println("----------------------------------------");
+    }
+
+    template<typename T>
+    u_int16_t serializeData(const T* data) {
+        byte dataBuffer[sizeof(*data)];
+        memcpy(dataBuffer, data, sizeof(*data));
+        crc.add((uint8_t*)dataBuffer, sizeof(*data));
+        u_int16_t checksum = crc.calc();
+        crc.restart();
+        return checksum;           
     }
 
 #endif
