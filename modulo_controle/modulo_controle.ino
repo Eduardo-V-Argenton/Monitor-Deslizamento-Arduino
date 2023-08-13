@@ -72,7 +72,6 @@ byte recieveSensorsRead(struct Packet<SensorsRead>* pck){
         Serial.println("");
     }
     if(waitSensorsRead(pck) == 1){
-        Serial.println("Waiting SensorsRead");
         printSensorReads(&pck->data);
         sendACK(lora, receptor_addr, communication_channel, 1);
     }
@@ -150,7 +149,7 @@ void printSensorReads(struct SensorsRead* data) {
 void loadLoraConfigPacket(struct Packet<LoRaConfig>* pck){
     pck->data.ADDH = 0;
     pck->data.ADDL = 1;
-    pck->data.CHAN = 64cd D;
+    pck->data.CHAN = 32;
     pck->data.uart_parity = MODE_00_8N1;
     pck->data.uart_baud_rate = UART_BPS_9600;
     pck->data.air_data_rate = AIR_DATA_RATE_010_24;
@@ -180,13 +179,16 @@ byte sendLoraConfigPacket(struct Packet<LoRaConfig>* pck){
     unsigned long startTime = millis();
     while(waitACK(lora, &sc, &pck_ack) == 0){
         if(millis() - startTime < 3000){
-            Serial.println("Erro na validação da alteração");
-            Serial.println("Retornando os valores do LoRa para default");
             return 0;
         }
         else{
             lora.sendFixedMessage(receptor_addr[0],receptor_addr[1],communication_channel,pck,sizeof(Packet<LoRaConfig>));
         }
+    }
+    if(handshake(3) == 0){
+        Serial.println("Erro no handshake");
+        Serial.println("Restaurando configuração do LoRa");
+        return 0;
     }
     Serial.println("Configuração concluida");
     return 1;

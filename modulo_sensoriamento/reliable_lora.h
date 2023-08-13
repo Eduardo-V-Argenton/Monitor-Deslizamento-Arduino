@@ -37,7 +37,6 @@
 
     byte waitSYN(LoRa_E220 lora, struct Packet<byte>* pck, byte* OP){
         if (lora.available()  > 1){
-            Serial.println("SYN RECIEVED");
             ResponseStructContainer rsc = lora.receiveMessageRSSI(sizeof(Packet<byte>));
             *pck = *(Packet<byte>*) rsc.data;
             rsc.close();
@@ -67,9 +66,7 @@
     byte waitACK(LoRa_E220 lora, struct SysConfigs* sc, struct Packet<byte>* pck){
         unsigned long startTime = millis();
         while (millis() - startTime < sc->time_out_ACK){
-            Serial.println("Waiting ACK...");
             if (lora.available()  > 1){
-                Serial.println("ACK RECIEVED");
                 ResponseStructContainer rsc = lora.receiveMessageRSSI(sizeof(Packet<byte>));
                 *pck = *(Packet<byte>*) rsc.data;
                 rsc.close();

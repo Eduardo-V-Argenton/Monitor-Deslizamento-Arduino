@@ -25,6 +25,7 @@ byte receptor_addr[] = {0,2};
 int send_delay = 5000;
 int reliable = 1;
 unsigned long int timeout_packet = 10000;
+Configuration configuration_backup;
 
 // Sensors
 #define CAP_SOIL_PIN 34
@@ -46,6 +47,7 @@ byte handshake();
 byte recieveLoraConfig(struct Packet<LoRaConfig>* pck);
 byte waitLoRaPacket(struct Packet<LoRaConfig>* pck);
 byte loadLoRaConfigFromPacket(struct LoRaConfig* lc);
+byte restoreLoRaConfigFromPacket();
 
 void setup() {
     Serial.begin(9600);
@@ -60,7 +62,6 @@ void loop() {
     if(reliable == 1){
         if(handshake(&OP) == 0){
             Serial.println("Erro no handshake");
-            exit -1;
         }else{
             Serial.println("Handshake feito");
         }
@@ -172,7 +173,8 @@ byte loadLoRaConfigFromPacket(struct LoRaConfig* lc){
     ResponseStructContainer c;
     c = lora.getConfiguration();
     Configuration configuration = *(Configuration*) c.data;
-    
+    configuration_backup = configuration;
+
     configuration.ADDH = lc->ADDH;
     configuration.ADDL = lc->ADDL;
     configuration.CHAN = lc->CHAN;
@@ -193,22 +195,45 @@ byte loadLoRaConfigFromPacket(struct LoRaConfig* lc){
     return rs.code;
 }
 
+byte restoreLoRaConfigFromPacket(){
+    ResponseStructContainer c;
+    c = lora.getConfiguration();
+    Configuration configuration = configuration_backup;
+    ResponseStatus rs = lora.setConfiguration(configuration, WRITE_CFG_PWR_DWN_LOSE);
+    printParameters(configuration);
+    c.close();
+    return rs.code;    
+}
+
 byte waitLoRaPacket(struct Packet<LoRaConfig>* pck){
     unsigned long startTime = millis();
     while (millis() - startTime < timeout_packet){
         if (lora.available()  > 1){
             ResponseStructContainer rsc = lora.receiveMessageRSSI(sizeof(Packet<LoRaConfig>));
             *pck = *(Packet<LoRaConfig>*) rsc.data;
-            Serial.println(pck->data.CHAN);
             rsc.close();
-            if(loadLoRaConfigFromPacket(&pck->data) == 1){
-                sendACK(lora, receptor_addr, communication_channel, 2);
-            }
+            sendACK(lora, receptor_addr, communication_channel, 2);
+            return 1;
         }
     }
     return 0;
 }
 
 byte recieveLoraConfig(struct Packet<LoRaConfig>* pck){
-    return waitLoRaPacket(pck);
+    if(waitLoRaPacket(pck) == 0){
+        return 0;
+    }
+    else if(loadLoRaConfigFromPacket(&pck->data) == 1){
+        sendACK(lora, receptor_addr, communication_channel, 3);
+    }
+    byte OP;
+    if(handshake(&OP) == 0){
+        Serial.println("Erro no handshake");
+        Serial.println("Restaurando configuração do LoRa");
+        restoreLoRaConfigFromPacket();
+        return 0;
+    }else{
+        Serial.println("configuração do LoRa concluida");
+    }
+    return 1;
 }
