@@ -1,13 +1,11 @@
 #ifndef EXTRAS_H
     #define EXTRAS_H
-    #include <CRC16.h>
     
     unsigned long int timeout_packet = 15000;
     unsigned long int time_out_SYNACK = 5000;
     unsigned long int time_out_ACK = 5000;
     unsigned long int time_out_handshake = 15000;
     
-    CRC16 crc;
 
     struct SensorsRead{
         float accelerometer[3];
@@ -21,17 +19,38 @@
         byte ADDH;
         byte ADDL;
         byte CHAN;
-        byte uart_parity;
-        byte uart_baud_rate;
         byte air_data_rate;
-        byte sub_packet_option;
         byte transmission_power;
         bool enable_RSSI_ambient_noise;
         byte wor_period;
         bool enable_lbt;
         bool enable_rssi;
-        bool enable_fixed_transmission;
     };
+
+    String stringifyLoraConfig(struct LoRaConfig* config){
+        String result = String(config->ADDH) + ";" +
+                        String(config->ADDL) + ";" +
+                        String(config->CHAN) + ";" +
+                        String(config->air_data_rate) + ";" +
+                        String(config->transmission_power) + ";" +
+                        String(config->enable_RSSI_ambient_noise) + ";" +
+                        String(config->wor_period) + ";" +
+                        String(config->enable_lbt) + ";" +
+                        String(config->enable_rssi);
+
+        return result;
+    }
+
+    String stringifySensorsRead(const SensorsRead* sr) {
+        String result = String(sr->accelerometer[0]) + ";" +
+                        String(sr->accelerometer[1]) + ";" +
+                        String(sr->accelerometer[2]) + ";" +
+                        String(sr->air_temperature) + ";" +
+                        String(sr->air_humidity) + ";" +
+                        String(sr->soil_moisture) + ";" +
+                        String(sr->rain_sensor_value);
+        return result;
+    }
 
     void printParameters(struct Configuration configuration) {
         Serial.println("----------------------------------------");
@@ -60,14 +79,31 @@
         Serial.println("----------------------------------------");
     }
 
-    template<typename T>
-    u_int16_t serializeData(const T* data) {
-        byte dataBuffer[sizeof(*data)];
-        memcpy(dataBuffer, data, sizeof(*data));
-        crc.add((uint8_t*)dataBuffer, sizeof(*data));
-        u_int16_t checksum = crc.calc();
-        crc.restart();
-        return checksum;           
+    uint16_t crc16_ccitt(const uint8_t *data, size_t length) {
+        uint16_t crc = 0xFFFF;
+
+        for (size_t i = 0; i < length; ++i) {
+            crc ^= (uint16_t)data[i] << 8;
+
+            for (int j = 0; j < 8; ++j) {
+                if (crc & 0x8000) {
+                    crc = (crc << 1) ^ 0x1021;
+                } else {
+                    crc <<= 1;
+                }
+            }
+        }
+        return crc;
+    }
+
+    void parseCommandToConfig(const char* input, int* outputArray) {
+        char *token;
+        int index = 0;
+        token = strtok((char *)input, ";");
+        while (token != NULL) {
+            outputArray[index++] = atoi(token);
+            token = strtok(NULL, ";");
+        }
     }
 
 #endif
