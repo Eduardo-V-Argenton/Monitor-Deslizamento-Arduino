@@ -42,13 +42,15 @@ byte loadConfig(int* config);
 byte checkCRCFromWeb(const char* input, String crc);
 void sendResponse(int result);
 byte verifyCommand(String* command);
+void printLoRaConfig();
 
 
 void setup() {
     Serial.begin(9600);
     connectWiFi();
-    loadLoraConfig();
-    lora.setMode(MODE_0_NORMAL);
+    printLoRaConfig();
+    lora.setMode(MODE_1_WOR_TRANSMITTER);
+
 }
  
 void loop() {
@@ -58,8 +60,8 @@ void loop() {
         if(op == -1){
             sendResponse(0);
         }
-    
-        int configSize = (op == 1) ? 7 : 20;
+
+        int configSize = (op == 1) ? 6 : 20;
         int* config = new int[configSize];
         parseCommandToConfig(command.substring(2).c_str(), config);
         if(checkCRCFromWeb(command, String(config[configSize - 1])) == 0){
@@ -76,7 +78,7 @@ void loop() {
                 }
             }else if(op == 1){
                 sendResponse(loadConfig(config));
-                
+
             }else{
                 sendResponse(waitSensorsRead());
             }
@@ -104,6 +106,7 @@ byte verifyCommand(String* command){
     }
     return op;
 }
+
 byte recieveSensorsRead(struct Packet<SensorsRead>* pck){
     if(handshake(1) == 0){
         Serial.println("Erro no handshake");
@@ -168,8 +171,6 @@ void loadLoraConfig(){
     configuration.ADDH = 0x0;
     configuration.ADDL = 0x1;
     configuration.TRANSMISSION_MODE.enableRSSI = RSSI_ENABLED;
-
-
 
     ResponseStatus rs = lora.setConfiguration(configuration, WRITE_CFG_PWR_DWN_LOSE);
 
@@ -294,7 +295,7 @@ String getCommands(){
 }
 
 byte loadConfig(int* config){
-    read_commands_period = config[5]*1000;
+    read_commands_period = config[4]*1000;
     ResponseStructContainer c;
     c = lora.getConfiguration();
     Configuration configuration = *(Configuration*) c.data;
@@ -304,7 +305,7 @@ byte loadConfig(int* config){
     configuration.OPTION.transmissionPower = config[2];
     configuration.TRANSMISSION_MODE.enableLBT = config[3];
 
-    ResponseStatus rs = lora.setConfiguration(configuration, WRITE_CFG_PWR_DWN_LOSE);
+    ResponseStatus rs = lora.setConfiguration(configuration, WRITE_CFG_PWR_DWN_SAVE);
     Serial.println("    Nova Configuração do LoRa   ");
     printParameters(configuration);
     c.close();
@@ -360,6 +361,14 @@ byte loadConfigForCommunication(int* config, byte op){
     ResponseStatus rs = lora.setConfiguration(configuration, WRITE_CFG_PWR_DWN_LOSE);
     printParameters(configuration);
     c.close();
-    Serial.println(rs.code);
     return rs.code;
+}
+
+void printLoRaConfig(){
+    lora.begin();
+    ResponseStructContainer c;
+    c = lora.getConfiguration();
+    Configuration configuration = *(Configuration*) c.data;
+    printParameters(configuration);
+    c.close();
 }

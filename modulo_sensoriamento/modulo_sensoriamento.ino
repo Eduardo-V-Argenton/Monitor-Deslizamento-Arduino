@@ -136,8 +136,7 @@ void loadLoraConfig(){
     configuration.TRANSMISSION_MODE.fixedTransmission = FT_FIXED_TRANSMISSION;
     configuration.SPED.uartBaudRate = UART_BPS; // Serial baud rate
     configuration.ADDH = addr[0];
-    configuration.ADDL = addr[1];
-    // configuration.TRANSMISSION_MODE.enableLBT = LBT_ENABLED;
+    configuration.ADDL = addr[2];
     configuration.TRANSMISSION_MODE.enableRSSI = RSSI_ENABLED;
 
     ResponseStatus rs = lora.setConfiguration(configuration, WRITE_CFG_PWR_DWN_LOSE);
@@ -179,16 +178,12 @@ byte loadLoRaConfigFromPacket(struct LoRaConfig* lc){
     configuration.ADDH = lc->ADDH;
     configuration.ADDL = lc->ADDL;
     configuration.CHAN = lc->CHAN;
-    configuration.SPED.uartParity = lc->uart_parity;
-    configuration.SPED.uartBaudRate = lc->uart_baud_rate;
     configuration.SPED.airDataRate = lc->air_data_rate;
-    configuration.OPTION.subPacketSetting = lc->sub_packet_option;
     configuration.OPTION.transmissionPower = lc->transmission_power;
     configuration.OPTION.RSSIAmbientNoise = lc->enable_RSSI_ambient_noise;
     configuration.TRANSMISSION_MODE.WORPeriod = lc->wor_period;
     configuration.TRANSMISSION_MODE.enableLBT = lc->enable_lbt;
     configuration.TRANSMISSION_MODE.enableRSSI = lc->enable_rssi;
-    configuration.TRANSMISSION_MODE.fixedTransmission = lc->enable_fixed_transmission;
 
     ResponseStatus rs = lora.setConfiguration(configuration, WRITE_CFG_PWR_DWN_LOSE);
     printParameters(configuration);
