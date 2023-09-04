@@ -1,42 +1,46 @@
 #ifndef EXTRAS_H
     #define EXTRAS_H
     
-    unsigned long int timeout_packet = 15000;
-    unsigned long int time_out_SYNACK = 5000;
-    unsigned long int time_out_ACK = 5000;
-    unsigned long int time_out_handshake = 15000;
-    
+    unsigned long int timeOutConfigPacket = 15000;
+    unsigned long int timeOutSensorsReadPacket = 15000;
+    unsigned long int timeOutHandshake = 15000;
 
     struct SensorsRead{
         float accelerometer[3];
-        float air_temperature;
-        float air_humidity;
-        int soil_moisture;
-        int rain_sensor_value;
+        float airTemperature;
+        float airHumidity;
+        int soilMoisture;
+        int rainSensorValue;
     };
 
     struct LoRaConfig{
-        byte ADDH;
-        byte ADDL;
+        float timeOutConfigPacket;
+        float timeOutSensorsReadPacket;
+        float timeOutHandshake;
+        float timeOutSYNACK;
+        float timeOutACK;
         byte CHAN;
-        byte air_data_rate;
-        byte transmission_power;
-        bool enable_RSSI_ambient_noise;
-        byte wor_period;
-        bool enable_lbt;
-        bool enable_rssi;
+        byte airDataRate;
+        byte transmissionPower;
+        byte WORPeriod;
+        byte cryptH;
+        byte cryptL;
+        bool enableLBT;
     };
 
     String stringifyLoraConfig(struct LoRaConfig* config){
-        String result = String(config->ADDH) + ";" +
-                        String(config->ADDL) + ";" +
-                        String(config->CHAN) + ";" +
-                        String(config->air_data_rate) + ";" +
-                        String(config->transmission_power) + ";" +
-                        String(config->enable_RSSI_ambient_noise) + ";" +
-                        String(config->wor_period) + ";" +
-                        String(config->enable_lbt) + ";" +
-                        String(config->enable_rssi);
+        String result = String(config->CHAN) + ";" +
+                        String(config->airDataRate) + ";" +
+                        String(config->transmissionPower) + ";" +
+                        String(config->WORPeriod) + ";" +
+                        String(config->enableLBT) + ";" +
+                        String(config->cryptH) + ";" +
+                        String(config->cryptL) + ";" +
+                        String(config->timeOutConfigPacket) + ";" +
+                        String(config->timeOutSensorsReadPacket) + ";" +
+                        String(config->timeOutHandshake) + ";" +
+                        String(config->timeOutSYNACK) + ";" +
+                        String(config->timeOutACK);
 
         return result;
     }
@@ -45,10 +49,10 @@
         String result = String(sr->accelerometer[0]) + ";" +
                         String(sr->accelerometer[1]) + ";" +
                         String(sr->accelerometer[2]) + ";" +
-                        String(sr->air_temperature) + ";" +
-                        String(sr->air_humidity) + ";" +
-                        String(sr->soil_moisture) + ";" +
-                        String(sr->rain_sensor_value);
+                        String(sr->airTemperature) + ";" +
+                        String(sr->airHumidity) + ";" +
+                        String(sr->soilMoisture) + ";" +
+                        String(sr->rainSensorValue);
         return result;
     }
 

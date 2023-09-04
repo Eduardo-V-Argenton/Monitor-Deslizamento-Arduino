@@ -17,12 +17,6 @@
 #define UART_BPS UART_BPS_9600
 HardwareSerial hs(UART);
 LoRa_E220 lora(&hs, AUX_PIN, M0_PIN, M1_PIN, UART_BPS_RATE);
-byte communication_channel = 64;
-byte addr[] = {0,1};
-byte receptor_addr[] = {0,2};
-
-int send_delay = 5000;
-int reliable = 1;
 
 Configuration configuration_backup;
 
@@ -37,12 +31,11 @@ int cap_soil_air = 2600;
 int cap_soil_water = 700; 
 
 void createAndSendSensorReadPacket();
-void loraConfig();
+void loadDefaultLoraConfig();
 void startDHT();
 void startAccel();
 void loadSensorRead(struct Packet<SensorsRead>* pck);
 void sendPacket(struct Packet<SensorsRead>* pck);
-byte handshake();
 byte recieveLoraConfig(struct Packet<LoRaConfig>* pck);
 byte waitLoRaPacket(struct Packet<LoRaConfig>* pck);
 byte loadLoRaConfigFromPacket(struct LoRaConfig* lc);
@@ -50,93 +43,82 @@ byte restoreLoRaConfigFromPacket();
 
 void setup() {
     Serial.begin(9600);
-    loadLoraConfig();
+    loadDefaultLoraConfig();
     startDHT();
     startAccel();
-    lora.setMode(MODE_0_NORMAL);
+    lora.setMode(MODE_0_NORMAL);  
 }
  
 void loop() {
     byte OP = 0;
-    if(reliable == 1){
-        if(handshake(&OP) == 0){
-            Serial.println("Erro no handshake");
-        }else{
-            Serial.println("Handshake feito");
-        }
-    }else{
-        SendSensorsRead();
+    int handshake_return = receptorHandshake(lora, &OP);
+    if(handshake_return == -1){
+        Serial.println("Erro no handshake");
+        return;
+    }else if(handshake_return == 1){
+        Serial.println("Handshake feito");
     }
-    if(OP == 1){
-        SendSensorsRead();
-    }
-    else if(OP == 2){
+    else{return;}
+
+    if(OP == 0){
         struct Packet<LoRaConfig> pck;
         recieveLoraConfig(&pck);
+    }
+    else if(OP == 2){
+        SendSensorsRead();
     }
 }
 
 byte SendSensorsRead(){
 
     struct Packet<SensorsRead> pck;
-    struct Packet<byte> pck2;
+    struct Packet<byte> pck_ack;
     unsigned long startTime = millis();
     loadSensorRead(&pck);
     pck.OP = 1;
     sendSensorsRead(&pck);
-    while(waitACK(lora, time_out_ACK, &pck2) == 0){
-        if(millis() - startTime >= timeout_packet)
+    Serial.println("Pacote com leitura dos sensores foi enviado");
+    while(waitACK(lora, &pck_ack) == 0){
+        if(millis() - startTime >= timeOutSensorsReadPacket)
             return 0;
         else
             sendSensorsRead(&pck);
     }
-    return 1;
-    delay(5000);
-}
-
-byte handshake(byte* OP){
-    struct Packet<byte> pck;
-    unsigned long startTime = millis();
-    while(waitSYN(lora, &pck, OP) == 0){
-        if(millis() - startTime >= time_out_handshake){return 0;}
-    }
-    sendSYNACK(lora, receptor_addr, communication_channel, 1);
-    while(waitACK(lora, time_out_ACK, &pck) == 0){
-        if(millis() - startTime >= time_out_handshake)
-            return 0;
-        else
-            sendSYNACK(lora, receptor_addr, communication_channel, 1);
-    }
+    Serial.println("Pacote foi recebido pelo destinatario");
     return 1;
 }
-
 
 void createAndSendSensorReadPacket(){
     struct Packet<SensorsRead> pck;
     loadSensorRead(&pck);
     pck.OP = 1;
     sendPacket(&pck);
-    delay(2000);    
 }
 
 byte sendSensorsRead(struct Packet<SensorsRead>* pck){
-    pck->Checksum = serializeData(&pck->data);
-    ResponseStatus lora_response = lora.sendFixedMessage(receptor_addr[0],receptor_addr[1],communication_channel,pck,sizeof(Packet<SensorsRead>));
+    String string_lora_config = stringifySensorsRead(&pck->data);
+    pck->Checksum = crc16_ccitt(reinterpret_cast<const uint8_t *>(string_lora_config.c_str()), string_lora_config.length());
+    ResponseStatus lora_response = lora.sendFixedMessage(receptorAddr[0],receptorAddr[1],channel,pck,sizeof(Packet<SensorsRead>));
 
     return lora_response.code;
 }
 
-void loadLoraConfig(){
+void loadDefaultLoraConfig(){
+    senderAddr[0] = 10;
+    senderAddr[1] = 10;
+    channel = 64;
+
     lora.begin();
     ResponseStructContainer c;
     c = lora.getConfiguration();
     Configuration configuration = *(Configuration*) c.data;
-
-    configuration.CHAN = communication_channel; // Communication channel
+    configuration.CHAN = channel;
     configuration.TRANSMISSION_MODE.fixedTransmission = FT_FIXED_TRANSMISSION;
-    configuration.SPED.uartBaudRate = UART_BPS; // Serial baud rate
-    configuration.ADDH = addr[0];
-    configuration.ADDL = addr[2];
+    configuration.TRANSMISSION_MODE.WORPeriod = WOR_2000_011;
+    configuration.SPED.uartBaudRate = UART_BPS_9600;
+    configuration.SPED.uartParity = MODE_00_8N1; 
+    configuration.ADDH = senderAddr[0];
+    configuration.ADDL = senderAddr[1];
     configuration.TRANSMISSION_MODE.enableRSSI = RSSI_ENABLED;
 
     ResponseStatus rs = lora.setConfiguration(configuration, WRITE_CFG_PWR_DWN_LOSE);
@@ -146,6 +128,7 @@ void loadLoraConfig(){
 
 void startDHT(){
     dht.begin();
+    Serial.println("DHT inicializado");
 }
 
 void startAccel(){
@@ -153,7 +136,8 @@ void startAccel(){
     {
         Serial.println("ADXL345 Error");
         while(1);
-    }   
+    }
+    Serial.println("ADXL345 inicializado");   
 }
 
 void loadSensorRead(struct Packet<SensorsRead>* pck){
@@ -163,31 +147,40 @@ void loadSensorRead(struct Packet<SensorsRead>* pck){
     pck->data.accelerometer[0] = event.acceleration.x;
     pck->data.accelerometer[1] = event.acceleration.y;
     pck->data.accelerometer[2] = event.acceleration.z;
-    pck->data.air_humidity = dht.readHumidity();
-    pck->data.air_temperature = dht.readTemperature();
-    pck->data.soil_moisture = analogRead(CAP_SOIL_PIN);
-    pck->data.rain_sensor_value = analogRead(RAIN_SENSOR_PIN);
+    pck->data.airHumidity = dht.readHumidity();
+    pck->data.airTemperature = dht.readTemperature();
+    pck->data.soilMoisture = analogRead(CAP_SOIL_PIN);
+    pck->data.rainSensorValue = analogRead(RAIN_SENSOR_PIN);
 }
 
 byte loadLoRaConfigFromPacket(struct LoRaConfig* lc){
+    timeOutConfigPacket = lc->timeOutConfigPacket*1000;
+    timeOutSensorsReadPacket = lc->timeOutSensorsReadPacket*1000;
+    timeOutHandshake = lc->timeOutHandshake*1000;
+    timeOutSYNACK = lc->timeOutSYNACK*1000;
+    timeOutACK = lc->timeOutACK*1000;
+
     ResponseStructContainer c;
     c = lora.getConfiguration();
     Configuration configuration = *(Configuration*) c.data;
     configuration_backup = configuration;
 
-    configuration.ADDH = lc->ADDH;
-    configuration.ADDL = lc->ADDL;
     configuration.CHAN = lc->CHAN;
-    configuration.SPED.airDataRate = lc->air_data_rate;
-    configuration.OPTION.transmissionPower = lc->transmission_power;
-    configuration.OPTION.RSSIAmbientNoise = lc->enable_RSSI_ambient_noise;
-    configuration.TRANSMISSION_MODE.WORPeriod = lc->wor_period;
-    configuration.TRANSMISSION_MODE.enableLBT = lc->enable_lbt;
-    configuration.TRANSMISSION_MODE.enableRSSI = lc->enable_rssi;
+    configuration.SPED.airDataRate = lc->airDataRate;
+    configuration.OPTION.transmissionPower = lc->transmissionPower;
+    configuration.TRANSMISSION_MODE.WORPeriod = lc->WORPeriod;
+    configuration.TRANSMISSION_MODE.enableLBT = lc->enableLBT;
 
     ResponseStatus rs = lora.setConfiguration(configuration, WRITE_CFG_PWR_DWN_LOSE);
+    Serial.println("    Nova Configuração do LoRa   ");
     printParameters(configuration);
     c.close();
+    Serial.println("Time out pacote de configuração: " + String(timeOutConfigPacket));
+    Serial.println("Time out pacote leitura de sensores: " + String(timeOutSensorsReadPacket));
+    Serial.println("Time out handshake: " + String(timeOutHandshake));
+    Serial.println("Time out SYNACK: " + String(timeOutConfigPacket));
+    Serial.println("Time out ACK: " + String(timeOutConfigPacket));
+    Serial.println("----------------------------------------");
     return rs.code;
 }
 
@@ -203,18 +196,20 @@ byte restoreLoRaConfigFromPacket(){
 
 byte waitLoRaPacket(struct Packet<LoRaConfig>* pck){
     unsigned long startTime = millis();
-    while (millis() - startTime < timeout_packet){
+    while (millis() - startTime < timeOutConfigPacket){
         if (lora.available()  > 1){
             ResponseStructContainer rsc = lora.receiveMessageRSSI(sizeof(Packet<LoRaConfig>));
             *pck = *(Packet<LoRaConfig>*) rsc.data;
             rsc.close();
-            if(serializeData(&pck->data) != pck->Checksum){
-                Serial.println(pck->Checksum);
-                Serial.println(serializeData(&pck->data));
+            String string_lora_config = stringifyLoraConfig(&pck->data);
+            uint16_t genCRC = crc16_ccitt(reinterpret_cast<const uint8_t *>(string_lora_config.c_str()), string_lora_config.length());
+            Serial.println("CRC Dado = " + String(pck->Checksum));
+            Serial.println("CRC Gerado = " + String(genCRC));
+            if(genCRC != pck->Checksum){
                 Serial.println("Falha no checksum");
                 continue;
             }
-            sendACK(lora, receptor_addr, communication_channel, 2);
+            sendACK(lora,channel, 2);
             return 1;
         }
     }
@@ -226,10 +221,10 @@ byte recieveLoraConfig(struct Packet<LoRaConfig>* pck){
         return 0;
     }
     else if(loadLoRaConfigFromPacket(&pck->data) == 1){
-        sendACK(lora, receptor_addr, communication_channel, 3);
+        sendACK(lora, channel, 3);
     }
     byte OP = 0;
-    if(handshake(&OP) == 0){
+    if(receptorHandshake(lora, &OP) == 0){
         Serial.println("Erro no handshake");
         Serial.println("Restaurando configuração do LoRa");
         restoreLoRaConfigFromPacket();
