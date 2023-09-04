@@ -195,12 +195,15 @@ byte sendLoraConfigPacket(int* config){
 
     struct Packet<byte> pck_ack;
     unsigned long startTime = millis();
+    unsigned long retryTime = millis() + timeToRetry;
+    
     while(waitACK(lora, &pck_ack) == 0){
         if(millis() - startTime >= timeOutConfigPacket){
             return 0;
         }
-        else{
+        else if(millis() >= retryTime){
             lora.sendFixedMessage(receptorAddr[0],receptorAddr[1],channel,&pck,sizeof(Packet<LoRaConfig>));
+            retryTime = millis() + timeToRetry;
         }
     }
     Serial.println("Pacote foi recebido pelo destinatario");
@@ -368,6 +371,7 @@ void loadDefaultLoraConfig(){
     configuration.SPED.uartParity = MODE_00_8N1;
     configuration.ADDH = senderAddr[0];
     configuration.ADDL = senderAddr[1];
+    configuration.OPTION.transmissionPower = POWER_22;
     configuration.TRANSMISSION_MODE.enableRSSI = RSSI_ENABLED;
 
     ResponseStatus rs = lora.setConfiguration(configuration, WRITE_CFG_PWR_DWN_LOSE);

@@ -178,8 +178,8 @@ byte loadLoRaConfigFromPacket(struct LoRaConfig* lc){
     Serial.println("Time out pacote de configuração: " + String(timeOutConfigPacket));
     Serial.println("Time out pacote leitura de sensores: " + String(timeOutSensorsReadPacket));
     Serial.println("Time out handshake: " + String(timeOutHandshake));
-    Serial.println("Time out SYNACK: " + String(timeOutConfigPacket));
-    Serial.println("Time out ACK: " + String(timeOutConfigPacket));
+    Serial.println("Time out SYNACK: " + String(timeOutSYNACK));
+    Serial.println("Time out ACK: " + String(timeOutACK));
     Serial.println("----------------------------------------");
     return rs.code;
 }
