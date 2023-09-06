@@ -18,8 +18,8 @@ LoRa_E220 lora(&hs, AUX_PIN, M0_PIN, M1_PIN, UART_BPS_RATE);
 
 int read_commands_period = 3000;
 
-const char* ssid = "Eduardo Net";
-const char* password = "edu19126";
+const char* ssid = "";
+const char* password = "";
 const char* commands_url = "http://192.168.1.108:8081/communication/commands/";
 const char* response_url = "http://192.168.1.108:8081/communication/response/";
 const char* data_url = "http://192.168.1.108:8081/communication/data/";
@@ -35,10 +35,12 @@ void connectWiFi();
 String getCommands();
 byte loadConfig(int* config);
 byte checkCRCFromWeb(const char* input, String crc);
-void sendResponse(int result);
+void sendConfigResponse(int result);
+void sendSensorsRead(int result, struct SensorsRead* data);
 byte verifyCommand(String* command);
 void printLoRaConfig();
 void loadDefaultLoraConfig();
+
 
 void setup() {
     Serial.begin(9600);
@@ -53,31 +55,42 @@ void loop() {
     else if(command != "0"){
         byte op = verifyCommand(&command);
         if(op == -1){
-            sendResponse(-1);
+            sendConfigResponse(-1);
             return;
         }
+        int configSize;
+        switch(op){
+            case 0:
+                configSize = 29;
+                break;
+            case 1:
+                configSize = 7;
+                break;
+            case 2:
+                configSize = 15;
+                break;
+            default:
+                return;
 
-        int configSize = (op == 1) ? 6 : 29;
+        }
         int* config = new int[configSize];
         parseCommandToConfig(command.substring(2).c_str(), config);
         if(checkCRCFromWeb(command, String(config[configSize - 1])) == 0){
             Serial.println("checksum Inválido");
-            sendResponse(-1);
+            sendConfigResponse(-1);
             return;
         }else{
-            if(op == 0){
+            if(op != 1){
                 int wasCorrectlyLoadedForCommunication = loadConfigForCommunication(config, op);
                 if(wasCorrectlyLoadedForCommunication == 1){
-                    sendResponse(sendLoraConfigPacket(config));
+                    if(op == 0){sendConfigResponse(sendLoraConfigPacket(config));}
+                    else{recieveAndSendSensorsRead();}
                 }else{
                     Serial.println("Erro no carregamento das informações para comunicação com o módulo de sensoriamento");
-                    sendResponse(-1);
+                    sendConfigResponse(-1);
                 }
-            }else if(op == 1){
-                sendResponse(loadConfig(config));
-
             }else{
-                sendResponse(waitSensorsRead());
+                sendConfigResponse(loadConfig(config));
             }
         }
         delete[] config;
@@ -104,22 +117,12 @@ byte verifyCommand(String* command){
     return op;
 }
 
-byte recieveSensorsRead(struct Packet<SensorsRead>* pck){
-    if(senderHandshake(lora, 1) == 0){
+byte recieveAndSendSensorsRead(){
+    if(senderHandshake(lora, 2) == 0){
         Serial.println("Erro no handshake");
         return 0;
     }
     Serial.println("Handshake feito");
-    Serial.println("");
-    
-    if(waitSensorsRead() == 1){
-        printSensorReads(&pck->data);
-        sendACK(lora, channel, 1);
-    }
-    return 1;
-}
-
-byte waitSensorsRead(){
     struct Packet<SensorsRead> pck;
     unsigned long startTime = millis();
     while (millis() - startTime < timeOutSensorsReadPacket){
@@ -135,6 +138,11 @@ byte waitSensorsRead(){
                 Serial.println("Falha no checksum");
                 continue;
             }
+            Serial.println("Pacote com leitura está sem problemas");
+            Serial.println("    Pacote recebido:    ");
+            printSensorReads(&pck.data);
+            sendACK(lora, channel, 1);
+            sendSensorsRead(&pck.data);
             return 1;
         }
     }
@@ -298,7 +306,7 @@ byte checkCRCFromWeb(String input, String crc){
     if( String(genCRC) == crc){return 1;}else{return 0;}
 }
 
-void sendResponse(int result){
+void sendConfigResponse(int result){
     HTTPClient http;
     http.begin(response_url);
 
@@ -377,4 +385,20 @@ void loadDefaultLoraConfig(){
     ResponseStatus rs = lora.setConfiguration(configuration, WRITE_CFG_PWR_DWN_LOSE);
     printParameters(configuration);
     c.close();
+}
+
+void sendSensorsRead(struct SensorsRead* data){
+    HTTPClient http;
+    http.begin(data_url);
+
+    http.addHeader("Content-Type", "application/x-www-form-urlencoded");
+
+    String postData = "key="+key+"&data="+stringifySensorsRead(data); ;
+    int httpResponseCode = http.POST(postData);
+    Serial.println("Resposta enviada = " + postData);
+    if(httpResponseCode <= 0){
+        Serial.print("Error in POST request. HTTP Response code: ");
+        Serial.println(-1);
+    }
+    http.end();
 }

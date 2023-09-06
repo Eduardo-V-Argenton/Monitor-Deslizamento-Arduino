@@ -30,15 +30,15 @@ Adafruit_ADXL345_Unified accel = Adafruit_ADXL345_Unified(12345);
 int cap_soil_air = 2600;
 int cap_soil_water = 700; 
 
-void createAndSendSensorReadPacket();
+byte loadAndSendSensorsRead();
 void loadDefaultLoraConfig();
 void startDHT();
 void startAccel();
 void loadSensorRead(struct Packet<SensorsRead>* pck);
-void sendPacket(struct Packet<SensorsRead>* pck);
 byte recieveLoraConfig(struct Packet<LoRaConfig>* pck);
 byte waitLoRaPacket(struct Packet<LoRaConfig>* pck);
 byte loadLoRaConfigFromPacket(struct LoRaConfig* lc);
+byte sendSensorsRead(struct Packet<SensorsRead>* pck);
 byte restoreLoRaConfigFromPacket();
 
 void setup() {
@@ -65,19 +65,20 @@ void loop() {
         recieveLoraConfig(&pck);
     }
     else if(OP == 2){
-        SendSensorsRead();
+        loadAndSendSensorsRead();
     }
 }
 
-byte SendSensorsRead(){
+byte loadAndSendSensorsRead(){
 
     struct Packet<SensorsRead> pck;
     struct Packet<byte> pck_ack;
     unsigned long startTime = millis();
     loadSensorRead(&pck);
-    pck.OP = 1;
+    pck.OP = 2;
     sendSensorsRead(&pck);
     Serial.println("Pacote com leitura dos sensores foi enviado");
+    Serial.println(stringifySensorsRead(&pck.data));
     while(waitACK(lora, &pck_ack) == 0){
         if(millis() - startTime >= timeOutSensorsReadPacket)
             return 0;
@@ -88,12 +89,6 @@ byte SendSensorsRead(){
     return 1;
 }
 
-void createAndSendSensorReadPacket(){
-    struct Packet<SensorsRead> pck;
-    loadSensorRead(&pck);
-    pck.OP = 1;
-    sendPacket(&pck);
-}
 
 byte sendSensorsRead(struct Packet<SensorsRead>* pck){
     String string_lora_config = stringifySensorsRead(&pck->data);
@@ -141,6 +136,7 @@ void startAccel(){
 }
 
 void loadSensorRead(struct Packet<SensorsRead>* pck){
+    delay(2000);
     sensors_event_t event; 
     accel.getEvent(&event);
 
