@@ -64,7 +64,7 @@ void loop() {
                 configSize = 29;
                 break;
             case 1:
-                configSize = 7;
+                configSize = 6;
                 break;
             case 2:
                 configSize = 15;
@@ -159,12 +159,6 @@ void printSensorReads(struct SensorsRead* data) {
 
     Serial.print("Umidade do solo: ");
     Serial.println(data->soilMoisture);
-
-    Serial.print("Temperatura do ar: ");
-    Serial.println(data->airTemperature);
-
-    Serial.print("Umidade do ar: ");
-    Serial.println(data->airHumidity);
 
     Serial.print("Valor do sensor de chuva: ");
     Serial.println(data->rainSensorValue);
