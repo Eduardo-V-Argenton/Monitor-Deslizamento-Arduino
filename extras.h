@@ -7,8 +7,6 @@
 
     struct SensorsRead{
         float accelerometer[3];
-        float airTemperature;
-        float airHumidity;
         int soilMoisture;
         int rainSensorValue;
     };
@@ -49,8 +47,6 @@
         String result = String(sr->accelerometer[0]) + ";" +
                         String(sr->accelerometer[1]) + ";" +
                         String(sr->accelerometer[2]) + ";" +
-                        String(sr->airTemperature) + ";" +
-                        String(sr->airHumidity) + ";" +
                         String(sr->soilMoisture) + ";" +
                         String(sr->rainSensorValue);
         return result;

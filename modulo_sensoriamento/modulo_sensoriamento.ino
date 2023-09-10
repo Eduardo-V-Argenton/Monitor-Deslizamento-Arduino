@@ -3,15 +3,13 @@
 #include <Wire.h>
 #include <Adafruit_Sensor.h>
 #include <Adafruit_ADXL345_U.h>
-#include <DHT.h>
 #include "extras.h"
 #include "reliable_lora.h"
-
 
 // LoRa
 #define UART 2
 #define AUX_PIN 18
-#define M0_PIN 32
+#define M0_PIN 23
 #define M1_PIN 19
 #define UART_BPS_RATE UART_BPS_RATE_9600
 #define UART_BPS UART_BPS_9600
@@ -21,18 +19,13 @@ LoRa_E220 lora(&hs, AUX_PIN, M0_PIN, M1_PIN, UART_BPS_RATE);
 Configuration configuration_backup;
 
 // Sensors
-#define CAP_SOIL_PIN 34
-#define RAIN_SENSOR_PIN 35
-#define DHT_PIN 4 
-#define DHT_TYPE DHT11
-DHT dht(DHT_PIN, DHT_TYPE);
+#define CAP_SOIL_PIN 13
+#define RAIN_SENSOR_PIN 4 
+#define TRANSISTOR_BASE_PIN 26
 Adafruit_ADXL345_Unified accel = Adafruit_ADXL345_Unified(12345);
-int cap_soil_air = 2600;
-int cap_soil_water = 700; 
 
 byte loadAndSendSensorsRead();
 void loadDefaultLoraConfig();
-void startDHT();
 void startAccel();
 void loadSensorRead(struct Packet<SensorsRead>* pck);
 byte recieveLoraConfig(struct Packet<LoRaConfig>* pck);
@@ -43,9 +36,11 @@ byte restoreLoRaConfigFromPacket();
 
 void setup() {
     Serial.begin(9600);
+    pinMode(TRANSISTOR_BASE_PIN, OUTPUT);
+    pinMode(CAP_SOIL_PIN, INPUT);
+    pinMode(RAIN_SENSOR_PIN, INPUT);
+    digitalWrite(TRANSISTOR_BASE_PIN, LOW);
     loadDefaultLoraConfig();
-    startDHT();
-    startAccel();
     lora.setMode(MODE_0_NORMAL);  
 }
  
@@ -121,11 +116,6 @@ void loadDefaultLoraConfig(){
     c.close();
 }
 
-void startDHT(){
-    dht.begin();
-    Serial.println("DHT inicializado");
-}
-
 void startAccel(){
     if(!accel.begin())
     {
@@ -136,17 +126,20 @@ void startAccel(){
 }
 
 void loadSensorRead(struct Packet<SensorsRead>* pck){
-    delay(2000);
+    digitalWrite(TRANSISTOR_BASE_PIN, HIGH);
+    delay(500);
+    startAccel();
+    delay(1500);
+
     sensors_event_t event; 
     accel.getEvent(&event);
 
     pck->data.accelerometer[0] = event.acceleration.x;
     pck->data.accelerometer[1] = event.acceleration.y;
     pck->data.accelerometer[2] = event.acceleration.z;
-    pck->data.airHumidity = dht.readHumidity();
-    pck->data.airTemperature = dht.readTemperature();
     pck->data.soilMoisture = analogRead(CAP_SOIL_PIN);
     pck->data.rainSensorValue = analogRead(RAIN_SENSOR_PIN);
+    digitalWrite(TRANSISTOR_BASE_PIN, LOW);
 }
 
 byte loadLoRaConfigFromPacket(struct LoRaConfig* lc){
