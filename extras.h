@@ -43,12 +43,12 @@
         return result;
     }
 
-    String stringifySensorsRead(const SensorsRead* sr) {
+    String stringifySensorsRead(const SensorsRead* sr, int sensor_module_id = 0) {
         String result = String(sr->accelerometer[0]) + ";" +
                         String(sr->accelerometer[1]) + ";" +
                         String(sr->accelerometer[2]) + ";" +
                         String(sr->soilMoisture) + ";" +
-                        String(sr->rainSensorValue);
+                        String(sr->rainSensorValue) + (sensor_module_id > 0 ? String(sensor_module_id) : "");
         return result;
     }
 
