@@ -23,6 +23,8 @@ const char* password = "";
 const char* commands_url = "http://192.168.1.111:8081/communication/commands/";
 const char* response_url = "http://192.168.1.111:8081/communication/response/";
 const char* data_url = "http://192.168.1.111:8081/communication/data/";
+const char* errors_url = "http://192.168.1.111:8081/communication/errors/";
+
 
 String key = "6dc8a0fb";
 
@@ -30,12 +32,13 @@ void loadLoraConfig();
 byte recieveSensorsRead(struct Packet<SensorsRead>* pck);
 byte waitSensorsRead();
 void printSensorReads(struct SensorsRead* data);
-byte sendLoraConfigPacket(int* config);
+byte sendLoraConfigPacket(int* config,  int sensor_module_id);
 void connectWiFi();
 String getCommands();
 byte loadConfig(int* config);
 byte checkCRCFromWeb(const char* input, String crc);
 void sendConfigResponse(int result);
+void sendErrorResponse(String message, int sensor_module_id);
 void sendSensorsRead(struct SensorsRead* data, int sensor_module_id);
 byte verifyCommand(String* command);
 void printLoRaConfig();
@@ -56,7 +59,6 @@ void loop() {
     else if(command != "0"){
         byte op = verifyCommand(&command);
         if(op == -1){
-            sendConfigResponse(-1);
             return;
         }
         int configSize;
@@ -78,17 +80,18 @@ void loop() {
         parseCommandToConfig(command.substring(2).c_str(), config);
         if(checkCRCFromWeb(command, String(config[configSize - 1])) == 0){
             Serial.println("checksum Inválido");
-            sendConfigResponse(-1);
+            sendErrorResponse("Checksum Inválido", config[configSize - 2]);
             return;
         }else{
             if(op != 1){
                 int wasCorrectlyLoadedForCommunication = loadConfigForCommunication(config, op);
                 if(wasCorrectlyLoadedForCommunication == 1){
-                    if(op == 0){sendConfigResponse(sendLoraConfigPacket(config));}
+                    if(op == 0){sendConfigResponse(sendLoraConfigPacket(config, config[configSize - 2]));}
                     else{recieveAndSendSensorsRead(config[configSize - 2]);}
                 }else{
                     Serial.println("Erro no carregamento das informações para comunicação com o módulo de sensoriamento");
-                    sendConfigResponse(-1);
+                    sendErrorResponse("Erro no carregamento das informações para comunicação com o módulo de sensoriamento", config[configSize - 2]);
+
                 }
             }else{
                 sendConfigResponse(loadConfig(config));
@@ -120,6 +123,7 @@ byte verifyCommand(String* command){
 
 byte recieveAndSendSensorsRead(int sensor_module_id){
     if(senderHandshake(lora, 2) == 0){
+        sendErrorResponse("Erro no handshake", sensor_module_id);
         Serial.println("Erro no handshake");
         return 0;
     }
@@ -137,6 +141,7 @@ byte recieveAndSendSensorsRead(int sensor_module_id){
             uint16_t genCRC = crc16_ccitt(data, string_sr.length());
             if(genCRC != pck.Checksum){
                 Serial.println("Falha no checksum");
+                sendErrorResponse("Checksum Inválido", sensor_module_id);
                 continue;
             }
             Serial.println("Pacote com leitura está sem problemas");
@@ -182,10 +187,11 @@ void loadLoraConfigPacket(struct Packet<LoRaConfig>* pck, int* config){
     Serial.println(stringifyLoraConfig(&pck->data));
 }
 
-byte sendLoraConfigPacket(int* config){
+byte sendLoraConfigPacket(int* config, int sensor_module_id){
     struct Packet<LoRaConfig> pck;
     if(senderHandshake(lora, 0) == 0){
         Serial.println("Erro no handshake");
+        sendErrorResponse("Erro no handshake", sensor_module_id);
         return 0;
     }
     Serial.println("Handshake feito");
@@ -213,6 +219,7 @@ byte sendLoraConfigPacket(int* config){
     Serial.println("Testando configuração com " + String(receptorAddr[0])+String(receptorAddr[1]));
     if(senderHandshake(lora, 3) == 0){
         Serial.println("Erro no handshake");
+        sendErrorResponse("Erro no handshake", sensor_module_id);
         Serial.println("Restaurando configuração do LoRa");
         return 0;
     }
@@ -308,6 +315,22 @@ void sendConfigResponse(int result){
     http.addHeader("Content-Type", "application/x-www-form-urlencoded");
 
     String postData = "key="+key+"&response="+result;
+    int httpResponseCode = http.POST(postData);
+    Serial.println("Resposta enviada = " + postData);
+    if(httpResponseCode <= 0){
+        Serial.print("Error in POST request. HTTP Response code: ");
+        Serial.println(-1);
+    }
+    http.end();
+}
+
+void sendErrorResponse(String message, int sensor_module_id){
+    HTTPClient http;
+    http.begin(errors_url);
+
+    http.addHeader("Content-Type", "application/x-www-form-urlencoded");
+
+    String postData = "key="+key+"&response="+message+";"+sensor_module_id;
     int httpResponseCode = http.POST(postData);
     Serial.println("Resposta enviada = " + postData);
     if(httpResponseCode <= 0){
