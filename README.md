@@ -1,3 +1,2 @@
-# Monitor-Deslizamento-Arduino
-Códigos arduino para sistema de monitoramento de deslizamento de terra
-<h1>EM DESENVOLVIMENTO</h1>
+# Monitor-Deslizamento-Solo
+Códigos para ESP32 para sistema de monitoramento de deslizamento de terra
